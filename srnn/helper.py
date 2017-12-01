@@ -173,7 +173,7 @@ def get_mean_error(ret_nodes, nodes, assumedNodesPresent, trueNodesPresent):
     counter = 0
 
     for tstep in range(pred_length):
-
+        counter = 0
         for nodeID in assumedNodesPresent:
 
             if nodeID not in trueNodesPresent[tstep]:
@@ -218,7 +218,7 @@ def get_final_error(ret_nodes, nodes, assumedNodesPresent, trueNodesPresent):
     # Last time-step
     tstep = pred_length - 1
     for nodeID in assumedNodesPresent:
-
+     
         if nodeID not in trueNodesPresent[tstep]:
             continue
 
