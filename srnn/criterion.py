@@ -67,7 +67,7 @@ def Gaussian2DLikelihood(outputs, targets, nodesPresent, pred_length):
         return loss
 
 
-def Gaussian2DLikelihoodInference(outputs, targets, assumedNodesPresent, nodesPresent):
+def Gaussian2DLikelihoodInference(outputs, targets, assumedNodesPresent, nodesPresent, use_cuda):
     '''
     Computes the likelihood of predicted locations under a bivariate Gaussian distribution at test time
     params:
@@ -100,7 +100,9 @@ def Gaussian2DLikelihoodInference(outputs, targets, assumedNodesPresent, nodesPr
     result = -torch.log(torch.clamp(result, min=epsilon))
 
     # Compute the loss
-    loss = Variable(torch.zeros(1).cuda())
+    loss = Variable(torch.zeros(1))
+    if use_cuda:
+        loss = loss.cuda()
     counter = 0
 
     for framenum in range(outputs.size()[0]):

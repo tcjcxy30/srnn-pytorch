@@ -76,12 +76,16 @@ def main():
                         help='decay rate for the optimizer')
 
     # Dropout rate
-    parser.add_argument('--dropout', type=float, default=0,
+    parser.add_argument('--dropout', type=float, default=0.,
                         help='Dropout probability')
 
     # The leave out dataset
     parser.add_argument('--leaveDataset', type=int, default=3,
                         help='The dataset index to be left out in training')
+
+    # Use GPU or CPU
+    parser.add_argument('--use_cuda', action="store_true", default=False,
+                        help='Use GPU or CPU')
 
     args = parser.parse_args()
 
@@ -89,7 +93,8 @@ def main():
 
 
 def train(args):
-    datasets = [i for i in range(5)]
+    # datasets = [i for i in range(5)]
+    datasets = [1, 2, 3]
     # Remove the leave out dataset from the datasets
     datasets.remove(args.leaveDataset)
     # datasets = [0]
@@ -125,10 +130,12 @@ def train(args):
 
     # Initialize net
     net = SRNN(args)
-    net.cuda()
+    if args.use_cuda:        
+        net = net.cuda()
 
-    optimizer = torch.optim.Adam(net.parameters(), lr=args.learning_rate)
+    # optimizer = torch.optim.Adam(net.parameters(), lr=args.learning_rate)
     # optimizer = torch.optim.RMSprop(net.parameters(), lr=args.learning_rate, momentum=0.0001, centered=True)
+    optimizer = torch.optim.Adagrad(net.parameters())
 
     learning_rate = args.learning_rate
     print('Training begin')
@@ -158,16 +165,28 @@ def train(args):
                 nodes, edges, nodesPresent, edgesPresent = stgraph.getSequence()
 
                 # Convert to cuda variables
-                nodes = Variable(torch.from_numpy(nodes).float()).cuda()
-                edges = Variable(torch.from_numpy(edges).float()).cuda()
+                nodes = Variable(torch.from_numpy(nodes).float())
+                if args.use_cuda:
+                    nodes = nodes.cuda()
+                edges = Variable(torch.from_numpy(edges).float())
+                if args.use_cuda:
+                    edges = edges.cuda()
 
                 # Define hidden states
                 numNodes = nodes.size()[1]
-                hidden_states_node_RNNs = Variable(torch.zeros(numNodes, args.human_node_rnn_size)).cuda()
-                hidden_states_edge_RNNs = Variable(torch.zeros(numNodes*numNodes, args.human_human_edge_rnn_size)).cuda()
+                hidden_states_node_RNNs = Variable(torch.zeros(numNodes, args.human_node_rnn_size))
+                if args.use_cuda:
+                    hidden_states_node_RNNs = hidden_states_node_RNNs.cuda()
+                hidden_states_edge_RNNs = Variable(torch.zeros(numNodes*numNodes, args.human_human_edge_rnn_size))
+                if args.use_cuda:
+                    hidden_states_edge_RNNs = hidden_states_edge_RNNs.cuda()
 
-                cell_states_node_RNNs = Variable(torch.zeros(numNodes, args.human_node_rnn_size)).cuda()
-                cell_states_edge_RNNs = Variable(torch.zeros(numNodes*numNodes, args.human_human_edge_rnn_size)).cuda()
+                cell_states_node_RNNs = Variable(torch.zeros(numNodes, args.human_node_rnn_size))
+                if args.use_cuda:
+                    cell_states_node_RNNs = cell_states_node_RNNs.cuda()
+                cell_states_edge_RNNs = Variable(torch.zeros(numNodes*numNodes, args.human_human_edge_rnn_size))
+                if args.use_cuda:
+                    cell_states_edge_RNNs = cell_states_edge_RNNs.cuda()
 
                 # Zero out the gradients
                 net.zero_grad()
@@ -224,15 +243,27 @@ def train(args):
                 nodes, edges, nodesPresent, edgesPresent = stgraph.getSequence()
 
                 # Convert to cuda variables
-                nodes = Variable(torch.from_numpy(nodes).float()).cuda()
-                edges = Variable(torch.from_numpy(edges).float()).cuda()
+                nodes = Variable(torch.from_numpy(nodes).float())
+                if args.use_cuda:
+                    nodes = nodes.cuda()
+                edges = Variable(torch.from_numpy(edges).float())
+                if args.use_cuda:
+                    edges = edges.cuda()
 
                 # Define hidden states
                 numNodes = nodes.size()[1]
-                hidden_states_node_RNNs = Variable(torch.zeros(numNodes, args.human_node_rnn_size)).cuda()
-                hidden_states_edge_RNNs = Variable(torch.zeros(numNodes*numNodes, args.human_human_edge_rnn_size)).cuda()
-                cell_states_node_RNNs = Variable(torch.zeros(numNodes, args.human_node_rnn_size)).cuda()
-                cell_states_edge_RNNs = Variable(torch.zeros(numNodes*numNodes, args.human_human_edge_rnn_size)).cuda()
+                hidden_states_node_RNNs = Variable(torch.zeros(numNodes, args.human_node_rnn_size))
+                if args.use_cuda:
+                    hidden_states_node_RNNs = hidden_states_node_RNNs.cuda()
+                hidden_states_edge_RNNs = Variable(torch.zeros(numNodes*numNodes, args.human_human_edge_rnn_size))
+                if args.use_cuda:
+                    hidden_states_edge_RNNs = hidden_states_edge_RNNs.cuda()
+                cell_states_node_RNNs = Variable(torch.zeros(numNodes, args.human_node_rnn_size))
+                if args.use_cuda:
+                    cell_states_node_RNNs = cell_states_node_RNNs.cuda()
+                cell_states_edge_RNNs = Variable(torch.zeros(numNodes*numNodes, args.human_human_edge_rnn_size))
+                if args.use_cuda:
+                    cell_states_edge_RNNs = cell_states_edge_RNNs.cuda()
 
                 outputs, _, _, _, _, _ = net(nodes[:args.seq_length], edges[:args.seq_length], nodesPresent[:-1], edgesPresent[:-1],
                                              hidden_states_node_RNNs, hidden_states_edge_RNNs,

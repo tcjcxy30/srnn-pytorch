@@ -40,6 +40,10 @@ def main():
     parser.add_argument('--epoch', type=int, default=49,
                         help='Epoch of model to be loaded')
 
+    # Use GPU or not
+    parser.add_argument('--use_cuda', action="store_true", default=False,
+                        help="Use GPU or CPU")
+
     # Parse the parameters
     sample_args = parser.parse_args()
 
@@ -54,7 +58,8 @@ def main():
 
     # Initialize net
     net = SRNN(saved_args, True)
-    net.cuda()
+    if saved_args.use_cuda:        
+        net = net.cuda()
 
     checkpoint_path = os.path.join(save_directory, 'srnn_model_'+str(sample_args.epoch)+'.tar')
 
@@ -94,8 +99,11 @@ def main():
         nodes, edges, nodesPresent, edgesPresent = stgraph.getSequence()
 
         # Convert to cuda variables
-        nodes = Variable(torch.from_numpy(nodes).float(), volatile=True).cuda()
-        edges = Variable(torch.from_numpy(edges).float(), volatile=True).cuda()
+        nodes = Variable(torch.from_numpy(nodes).float(), volatile=True)
+        edges = Variable(torch.from_numpy(edges).float(), volatile=True)
+        if saved_args.use_cuda:
+            nodes = nodes.cuda()
+            edges = edges.cuda()
 
         # Separate out the observed part of the trajectory
         obs_nodes, obs_edges, obs_nodesPresent, obs_edgesPresent = nodes[:sample_args.obs_length], edges[:sample_args.obs_length], nodesPresent[:sample_args.obs_length], edgesPresent[:sample_args.obs_length]
@@ -104,7 +112,7 @@ def main():
         ret_nodes, ret_attn = sample(obs_nodes, obs_edges, obs_nodesPresent, obs_edgesPresent, sample_args, net, nodes, edges, nodesPresent)
 
         # Compute mean and final displacement error
-        total_error += get_mean_error(ret_nodes[sample_args.obs_length:].data, nodes[sample_args.obs_length:].data, nodesPresent[sample_args.obs_length-1], nodesPresent[sample_args.obs_length:])
+        total_error += get_mean_error(ret_nodes[sample_args.obs_length:].data, nodes[sample_args.obs_length:].data, nodesPresent[sample_args.obs_length-1], nodesPresent[sample_args.obs_length:], saved_args.use_cuda)
         final_error += get_final_error(ret_nodes[sample_args.obs_length:].data, nodes[sample_args.obs_length:].data, nodesPresent[sample_args.obs_length-1], nodesPresent[sample_args.obs_length:])
 
         end = time.time()
@@ -112,7 +120,10 @@ def main():
         print('Processed trajectory number : ', batch, 'out of', dataloader.num_batches, 'trajectories in time', end - start)
 
         # Store results
-        results.append((nodes.data.cpu().numpy(), ret_nodes.data.cpu().numpy(), nodesPresent, sample_args.obs_length, ret_attn, frameIDs))
+        if saved_args.use_cuda:            
+            results.append((nodes.data.cpu().numpy(), ret_nodes.data.cpu().numpy(), nodesPresent, sample_args.obs_length, ret_attn, frameIDs))
+        else:
+            results.append((nodes.data.numpy(), ret_nodes.data.numpy(), nodesPresent, sample_args.obs_length, ret_attn, frameIDs))
 
         # Reset the ST graph
         stgraph.reset()
@@ -158,10 +169,15 @@ def sample(nodes, edges, nodesPresent, edgesPresent, args, net, true_nodes, true
     numNodes = nodes.size()[1]
 
     # Initialize hidden states for the nodes
-    h_nodes = Variable(torch.zeros(numNodes, net.args.human_node_rnn_size), volatile=True).cuda()
-    h_edges = Variable(torch.zeros(numNodes * numNodes, net.args.human_human_edge_rnn_size), volatile=True).cuda()
-    c_nodes = Variable(torch.zeros(numNodes, net.args.human_node_rnn_size), volatile=True).cuda()
-    c_edges = Variable(torch.zeros(numNodes * numNodes, net.args.human_human_edge_rnn_size), volatile=True).cuda()
+    h_nodes = Variable(torch.zeros(numNodes, net.args.human_node_rnn_size), volatile=True)
+    h_edges = Variable(torch.zeros(numNodes * numNodes, net.args.human_human_edge_rnn_size), volatile=True)
+    c_nodes = Variable(torch.zeros(numNodes, net.args.human_node_rnn_size), volatile=True)
+    c_edges = Variable(torch.zeros(numNodes * numNodes, net.args.human_human_edge_rnn_size), volatile=True)
+    if args.use_cuda:
+        h_nodes = h_nodes.cuda()
+        h_edges = h_edges.cuda()
+        c_nodes = c_nodes.cuda()
+        c_edges = c_edges.cuda()
 
     # Propagate the observed length of the trajectory
     for tstep in range(args.obs_length-1):
@@ -170,10 +186,14 @@ def sample(nodes, edges, nodesPresent, edgesPresent, args, net, true_nodes, true
         # loss_obs = Gaussian2DLikelihood(out_obs, nodes[tstep+1].view(1, numNodes, 2), [nodesPresent[tstep+1]])
 
     # Initialize the return data structures
-    ret_nodes = Variable(torch.zeros(args.obs_length + args.pred_length, numNodes, 2), volatile=True).cuda()
+    ret_nodes = Variable(torch.zeros(args.obs_length + args.pred_length, numNodes, 2), volatile=True)
+    if args.use_cuda:
+        ret_nodes = ret_nodes.cuda()
     ret_nodes[:args.obs_length, :, :] = nodes.clone()
 
-    ret_edges = Variable(torch.zeros((args.obs_length + args.pred_length), numNodes * numNodes, 2), volatile=True).cuda()
+    ret_edges = Variable(torch.zeros((args.obs_length + args.pred_length), numNodes * numNodes, 2), volatile=True)
+    if args.use_cuda:
+        ret_edges = ret_edges.cuda()
     ret_edges[:args.obs_length, :, :] = edges.clone()
 
     ret_attn = []
@@ -184,7 +204,7 @@ def sample(nodes, edges, nodesPresent, edgesPresent, args, net, true_nodes, true
         # Forward prop
         outputs, h_nodes, h_edges, c_nodes, c_edges, attn_w = net(ret_nodes[tstep].view(1, numNodes, 2), ret_edges[tstep].view(1, numNodes*numNodes, 2),
                                                                   [nodesPresent[args.obs_length-1]], [edgesPresent[args.obs_length-1]], h_nodes, h_edges, c_nodes, c_edges)
-        loss_pred = Gaussian2DLikelihoodInference(outputs, true_nodes[tstep + 1].view(1, numNodes, 2), nodesPresent[args.obs_length-1], [true_nodesPresent[tstep + 1]])
+        loss_pred = Gaussian2DLikelihoodInference(outputs, true_nodes[tstep + 1].view(1, numNodes, 2), nodesPresent[args.obs_length-1], [true_nodesPresent[tstep + 1]], args.use_cuda)
 
         # Sample from o
         # mux, ... are tensors of shape 1 x numNodes
@@ -196,7 +216,7 @@ def sample(nodes, edges, nodesPresent, edgesPresent, args, net, true_nodes, true
 
         # Compute edges
         # TODO Currently, assuming edges from the last observed time-step will stay for the entire prediction length
-        ret_edges[tstep + 1, :, :] = compute_edges(ret_nodes.data, tstep + 1, edgesPresent[args.obs_length-1])
+        ret_edges[tstep + 1, :, :] = compute_edges(ret_nodes.data, tstep + 1, edgesPresent[args.obs_length-1], args.use_cuda)
 
         # Store computed attention weights
         ret_attn.append(attn_w[0])

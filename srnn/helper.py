@@ -109,7 +109,7 @@ def sample_gaussian_2d(mux, muy, sx, sy, corr, nodesPresent):
     return next_x, next_y
 
 
-def compute_edges(nodes, tstep, edgesPresent):
+def compute_edges(nodes, tstep, edgesPresent, use_cuda):
     '''
     Computes new edgeFeatures at test time
     params:
@@ -125,7 +125,9 @@ def compute_edges(nodes, tstep, edgesPresent):
     Contains vectors representing the edges
     '''
     numNodes = nodes.size()[1]
-    edges = (torch.zeros(numNodes * numNodes, 2)).cuda()
+    edges = (torch.zeros(numNodes * numNodes, 2))
+    if use_cuda:
+        edges = edges.cuda()
     for edgeID in edgesPresent:
         nodeID_a = edgeID[0]
         nodeID_b = edgeID[1]
@@ -148,7 +150,7 @@ def compute_edges(nodes, tstep, edgesPresent):
     return edges
 
 
-def get_mean_error(ret_nodes, nodes, assumedNodesPresent, trueNodesPresent):
+def get_mean_error(ret_nodes, nodes, assumedNodesPresent, trueNodesPresent, use_cuda):
     '''
     Computes average displacement error
     Parameters
@@ -169,7 +171,9 @@ def get_mean_error(ret_nodes, nodes, assumedNodesPresent, trueNodesPresent):
     Error : Mean euclidean distance between predicted trajectory and the true trajectory
     '''
     pred_length = ret_nodes.size()[0]
-    error = torch.zeros(pred_length).cuda()
+    error = torch.zeros(pred_length)
+    if use_cuda:
+        error = error.cuda()
     counter = 0
 
     for tstep in range(pred_length):
@@ -234,7 +238,7 @@ def get_final_error(ret_nodes, nodes, assumedNodesPresent, trueNodesPresent):
     return error
 
 
-def sample_gaussian_2d_batch(outputs, nodesPresent, edgesPresent, nodes_prev_tstep):
+def sample_gaussian_2d_batch(outputs, nodesPresent, edgesPresent, nodes_prev_tstep, use_cuda):
     mux, muy, sx, sy, corr = getCoef_train(outputs)
 
     next_x, next_y = sample_gaussian_2d_train(mux.data, muy.data, sx.data, sy.data, corr.data, nodesPresent)
@@ -243,16 +247,20 @@ def sample_gaussian_2d_batch(outputs, nodesPresent, edgesPresent, nodes_prev_tst
     nodes[:, 0] = next_x
     nodes[:, 1] = next_y
 
-    nodes = Variable(nodes.cuda())
+    nodes = Variable(nodes)
+    if use_cuda:
+        nodes = nodes.cuda()
 
-    edges = compute_edges_train(nodes, edgesPresent, nodes_prev_tstep)
+    edges = compute_edges_train(nodes, edgesPresent, nodes_prev_tstep, use_cuda)
 
     return nodes, edges
 
 
-def compute_edges_train(nodes, edgesPresent, nodes_prev_tstep):
+def compute_edges_train(nodes, edgesPresent, nodes_prev_tstep, use_cuda):
     numNodes = nodes.size()[0]
-    edges = Variable((torch.zeros(numNodes * numNodes, 2)).cuda())
+    edges = Variable((torch.zeros(numNodes * numNodes, 2)))
+    if use_cuda:
+        edges = edges.cuda()
     for edgeID in edgesPresent:
         nodeID_a = edgeID[0]
         nodeID_b = edgeID[1]
