@@ -38,9 +38,9 @@ def main():
                         help='Dimension of the node output')
 
     # Embedding size
-    parser.add_argument('--human_node_embedding_size', type=int, default=64,
+    parser.add_argument('--human_node_embedding_size', type=int, default=128,
                         help='Embedding size of node features')
-    parser.add_argument('--human_human_edge_embedding_size', type=int, default=64,
+    parser.add_argument('--human_human_edge_embedding_size', type=int, default=128,
                         help='Embedding size of edge features')
 
     # Attention vector dimension
@@ -58,7 +58,7 @@ def main():
                         help='Batch size')
 
     # Number of epochs
-    parser.add_argument('--num_epochs', type=int, default=200,
+    parser.add_argument('--num_epochs', type=int, default=1000,
                         help='number of epochs')
 
     # Gradient value at which it should be clipped
@@ -76,7 +76,7 @@ def main():
                         help='decay rate for the optimizer')
 
     # Dropout rate
-    parser.add_argument('--dropout', type=float, default=0.,
+    parser.add_argument('--dropout', type=float, default=0.5,
                         help='Dropout probability')
 
     # The leave out dataset
