@@ -17,7 +17,7 @@ from torch.autograd import Variable
 from utils import DataLoader
 from st_graph import ST_GRAPH
 from model import SRNN
-from criterion import Gaussian2DLikelihood
+from criterion import Gaussian2DLikelihood, Gaussian2DSampleLoss
 
 
 def main():
@@ -48,9 +48,9 @@ def main():
                         help='Attention size')
 
     # Sequence length
-    parser.add_argument('--seq_length', type=int, default=20,
+    parser.add_argument('--seq_length', type=int, default=10,
                         help='Sequence length')
-    parser.add_argument('--pred_length', type=int, default=12,
+    parser.add_argument('--pred_length', type=int, default=5,
                         help='Predicted sequence length')
 
     # Batch size
@@ -58,25 +58,25 @@ def main():
                         help='Batch size')
 
     # Number of epochs
-    parser.add_argument('--num_epochs', type=int, default=1000,
+    parser.add_argument('--num_epochs', type=int, default=100,
                         help='number of epochs')
 
     # Gradient value at which it should be clipped
     parser.add_argument('--grad_clip', type=float, default=10.,
                         help='clip gradients at this value')
     # Lambda regularization parameter (L2)
-    parser.add_argument('--lambda_param', type=float, default=0.00005,
+    parser.add_argument('--lambda_param', type=float, default=0.0001,
                         help='L2 regularization parameter')
 
     # Learning rate parameter
     parser.add_argument('--learning_rate', type=float, default=0.001,
                         help='learning rate')
     # Decay rate for the learning rate parameter
-    parser.add_argument('--decay_rate', type=float, default=0.99,
+    parser.add_argument('--decay_rate', type=float, default=0.95,
                         help='decay rate for the optimizer')
 
     # Dropout rate
-    parser.add_argument('--dropout', type=float, default=0.5,
+    parser.add_argument('--dropout', type=float, default=0.,
                         help='Dropout probability')
 
     # The leave out dataset
@@ -93,7 +93,7 @@ def main():
 
 
 def train(args):
-    # datasets = [i for i in range(5)]
+    datasets = [i for i in range(5)]
     datasets = [1, 2, 3]
     # Remove the leave out dataset from the datasets
     datasets.remove(args.leaveDataset)
@@ -135,7 +135,11 @@ def train(args):
 
     # optimizer = torch.optim.Adam(net.parameters(), lr=args.learning_rate)
     # optimizer = torch.optim.RMSprop(net.parameters(), lr=args.learning_rate, momentum=0.0001, centered=True)
-    optimizer = torch.optim.Adagrad(net.parameters())
+    # optimizer = torch.optim.Adagrad(net.parameters(), weight_decay=args.lambda_param)
+    # optimizer = torch.optim.Adagrad(net.parameters())
+    optimizer = torch.optim.RMSprop(net.parameters(), lr=args.learning_rate, alpha=0.9)
+    # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, verbose=True, patience=5)
+    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=args.decay_rate)
 
     learning_rate = args.learning_rate
     print('Training begin')
@@ -156,13 +160,17 @@ def train(args):
 
             # Loss for this batch
             loss_batch = 0
-
+            # Zero out the gradients
+            net.zero_grad()
+            optimizer.zero_grad()
             # For each sequence in the batch
             for sequence in range(dataloader.batch_size):
                 # Construct the graph for the current sequence
                 stgraph.readGraph([x[sequence]])
 
                 nodes, edges, nodesPresent, edgesPresent = stgraph.getSequence()
+                # print(nodes, nodesPresent)
+                # input()
 
                 # Convert to cuda variables
                 nodes = Variable(torch.from_numpy(nodes).float())
@@ -188,28 +196,24 @@ def train(args):
                 if args.use_cuda:
                     cell_states_edge_RNNs = cell_states_edge_RNNs.cuda()
 
-                # Zero out the gradients
-                net.zero_grad()
-                optimizer.zero_grad()
-
                 # Forward prop
                 outputs, _, _, _, _, _ = net(nodes[:args.seq_length], edges[:args.seq_length], nodesPresent[:-1], edgesPresent[:-1], hidden_states_node_RNNs, hidden_states_edge_RNNs, cell_states_node_RNNs, cell_states_edge_RNNs)
 
                 # Compute loss
-                loss = Gaussian2DLikelihood(outputs, nodes[1:], nodesPresent[1:], args.pred_length)
+                # loss = Gaussian2DLikelihood(outputs, nodes[1:], nodesPresent[1:], args.pred_length)
+                loss = Gaussian2DSampleLoss(outputs, nodes[1:], nodesPresent[1:], args.pred_length, args.use_cuda)
                 loss_batch += loss.data[0]
 
                 # Compute gradients
                 loss.backward()
-
-                # Clip gradients
-                torch.nn.utils.clip_grad_norm(net.parameters(), args.grad_clip)
-
-                # Update parameters
-                optimizer.step()
-
                 # Reset the stgraph
                 stgraph.reset()
+            
+            # Clip gradients
+            torch.nn.utils.clip_grad_norm(net.parameters(), args.grad_clip)
+
+            # Update parameters
+            optimizer.step()
 
             end = time.time()
             loss_batch = loss_batch / dataloader.batch_size
@@ -270,7 +274,8 @@ def train(args):
                                              cell_states_node_RNNs, cell_states_edge_RNNs)
 
                 # Compute loss
-                loss = Gaussian2DLikelihood(outputs, nodes[1:], nodesPresent[1:], args.pred_length)
+                # loss = Gaussian2DLikelihood(outputs, nodes[1:], nodesPresent[1:], args.pred_length)
+                loss = Gaussian2DSampleLoss(outputs, nodes[1:], nodesPresent[1:], args.pred_length, args.use_cuda)
 
                 loss_batch += loss.data[0]
 
@@ -286,6 +291,8 @@ def train(args):
         if loss_epoch < best_val_loss:
             best_val_loss = loss_epoch
             best_epoch = epoch
+
+        scheduler.step()
 
         # Record best epoch and best validation loss
         print('(epoch {}), valid_loss = {:.3f}'.format(epoch, loss_epoch))

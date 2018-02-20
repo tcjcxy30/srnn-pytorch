@@ -105,9 +105,29 @@ def sample_gaussian_2d(mux, muy, sx, sy, corr, nodesPresent):
         next_values = np.random.multivariate_normal(mean, cov, 1)
         next_x[node] = next_values[0][0]
         next_y[node] = next_values[0][1]
+        # next_x[node] = o_mux[node]
+        # next_y[node] = o_muy[node]
 
     return next_x, next_y
 
+def sample_gaussian_2d_new(mux, muy, sx, sy, corr, nodesPresent):
+    o_mux, o_muy, o_sx, o_sy, o_corr = mux[0, :], muy[0, :], sx[0, :], sy[0, :], corr[0, :]
+
+    numNodes = mux.size()[1]
+
+    next_x = torch.zeros(numNodes)
+    next_y = torch.zeros(numNodes)
+
+    for node in range(numNodes):
+        if node not in nodesPresent:
+            continue
+
+        z1 = torch.randn(1)
+        z2 = torch.randn(1)
+        next_x[node] = o_sx[node] * z1[0] + o_mux[node]
+        next_y[node] = o_sy[node] * (o_corr[node] * z1[0] + np.sqrt(1 - o_corr[node]**2) * z2[0]) + o_muy[node]
+
+    return next_x, next_y
 
 def compute_edges(nodes, tstep, edgesPresent, use_cuda):
     '''

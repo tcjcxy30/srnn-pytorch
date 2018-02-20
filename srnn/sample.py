@@ -19,7 +19,7 @@ import numpy as np
 from utils import DataLoader
 from st_graph import ST_GRAPH
 from model import SRNN
-from helper import getCoef, sample_gaussian_2d, compute_edges, get_mean_error, get_final_error
+from helper import getCoef, sample_gaussian_2d, compute_edges, get_mean_error, get_final_error, sample_gaussian_2d_new
 from criterion import Gaussian2DLikelihood, Gaussian2DLikelihoodInference
 
 
@@ -51,6 +51,8 @@ def main():
     save_directory = 'save/'
     save_directory += str(sample_args.test_dataset)+'/'
     save_directory += 'save_attention'
+
+    save_directory = 'save/3/save_attention'
 
     # Define the path for the config file for saved args
     with open(os.path.join(save_directory, 'config.pkl'), 'rb') as f:
@@ -209,7 +211,7 @@ def sample(nodes, edges, nodesPresent, edgesPresent, args, net, true_nodes, true
         # Sample from o
         # mux, ... are tensors of shape 1 x numNodes
         mux, muy, sx, sy, corr = getCoef(outputs)
-        next_x, next_y = sample_gaussian_2d(mux.data, muy.data, sx.data, sy.data, corr.data, nodesPresent[args.obs_length-1])
+        next_x, next_y = sample_gaussian_2d_new(mux.data, muy.data, sx.data, sy.data, corr.data, nodesPresent[args.obs_length-1])
 
         ret_nodes[tstep + 1, :, 0] = next_x
         ret_nodes[tstep + 1, :, 1] = next_y

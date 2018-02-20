@@ -30,6 +30,7 @@ def Gaussian2DLikelihood(outputs, targets, nodesPresent, pred_length):
     # Extract mean, std devs and correlation
     mux, muy, sx, sy, corr = getCoef(outputs)
 
+
     # Compute factors
     normx = targets[:, :, 0] - mux
     normy = targets[:, :, 1] - muy
@@ -66,6 +67,44 @@ def Gaussian2DLikelihood(outputs, targets, nodesPresent, pred_length):
     else:
         return loss
 
+
+def Gaussian2DSampleLoss(outputs, targets, nodesPresent, pred_length, use_cuda):
+    # Get the sequence length
+    seq_length = outputs.size()[0]
+    # Get the observed length
+    obs_length = seq_length - pred_length
+    # Number of nodes
+    numNodes = outputs.size()[1]
+
+    # Extract mean, std devs and correlation
+    mux, muy, sx, sy, corr = getCoef(outputs)
+
+    z1 = Variable(torch.randn(seq_length, numNodes))
+    z2 = Variable(torch.randn(seq_length, numNodes))
+
+    if use_cuda:
+        z1 = z1.cuda()
+        z2 = z2.cuda()
+
+    x = torch.mul(sx, z1) + mux
+    y = torch.mul(sy, (torch.mul(corr, z1) + torch.mul(torch.sqrt(1 - torch.pow(corr, 2)), z2))) + muy
+
+    loss = 0
+    counter = 0
+
+    for framenum in range(obs_length, seq_length):
+        nodeIDs = nodesPresent[framenum]
+
+        for nodeID in nodeIDs:
+            square_loss_x = (targets[framenum, nodeID, 0] - x[framenum, nodeID])**2
+            square_loss_y = (targets[framenum, nodeID, 1] - y[framenum, nodeID])**2
+            loss = loss + square_loss_x + square_loss_y
+            counter = counter + 1
+
+    if counter != 0:
+        return loss/counter
+    else:
+        return loss
 
 def Gaussian2DLikelihoodInference(outputs, targets, assumedNodesPresent, nodesPresent, use_cuda):
     '''

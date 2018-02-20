@@ -42,7 +42,7 @@ class DataLoader():
         self.seq_length = seq_length
 
         # Validation arguments
-        self.val_fraction = 0.2
+        self.val_fraction = 0.4
 
         # Define the path in which the process data would be stored
         data_file = os.path.join(self.data_dir, "trajectories.cpkl")
@@ -227,14 +227,15 @@ class DataLoader():
                 x_batch.append(seq_source_frame_data)
                 y_batch.append(seq_target_frame_data)
                 frame_batch.append(seq_frame_ids)
+                d.append(self.dataset_pointer)
 
                 # advance the frame pointer to a random point
                 if randomUpdate:
-                    self.frame_pointer += random.randint(1, self.seq_length)
+                    # self.frame_pointer += random.randint(1, self.seq_length)
+                    self.tick_batch_pointer(valid=False)
                 else:
                     self.frame_pointer += self.seq_length
 
-                d.append(self.dataset_pointer)
                 i += 1
 
             else:
@@ -294,12 +295,13 @@ class DataLoader():
         '''
         if not valid:
             # Go to the next dataset
-            self.dataset_pointer += 1
-            # Set the frame pointer to zero for the current dataset
-            self.frame_pointer = 0
-            # If all datasets are done, then go to the first one again
+            self.dataset_pointer += np.random.randint(len(self.data))
             if self.dataset_pointer >= len(self.data):
-                self.dataset_pointer = 0
+                self.dataset_pointer = np.random.randint(len(self.data))
+            # Set the frame pointer to zero for the current dataset
+            self.frame_pointer = np.random.randint(len(self.data[self.dataset_pointer]))
+            # If all datasets are done, then go to the first one again
+            
         else:
             # Go to the next dataset
             self.valid_dataset_pointer += 1
@@ -315,8 +317,8 @@ class DataLoader():
         '''
         if not valid:
             # Go to the first frame of the first dataset
-            self.dataset_pointer = 0
-            self.frame_pointer = 0
+            self.dataset_pointer = np.random.randint(len(self.data))
+            self.frame_pointer = np.random.randint(len(self.data[self.dataset_pointer]))
         else:
             self.valid_dataset_pointer = 0
             self.valid_frame_pointer = 0
